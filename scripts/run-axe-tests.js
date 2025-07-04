@@ -87,21 +87,19 @@ const urlEntries = Object.entries(urlsToTest)
 // Get ChromeDriver path from browser-driver-manager
 let chromedriverPath = "";
 try {
-  const homeDir = process.env.HOME || process.env.USERPROFILE;
-  const envPath = `${homeDir}/.browser-driver-manager/.env`;
+  // Run browser-driver-manager install chrome to get the paths
+  const output = execSync("npx browser-driver-manager install chrome", { encoding: "utf8" });
   
-  if (fs.existsSync(envPath)) {
-    const envContent = fs.readFileSync(envPath, 'utf8');
-    const chromedriverMatch = envContent.match(/CHROMEDRIVER_TEST_PATH=(.+)/);
-    if (chromedriverMatch) {
-      chromedriverPath = chromedriverMatch[1].trim();
-      debugLog("ChromeDriver path from .env file", chromedriverPath);
-    }
+  // Parse the CHROMEDRIVER_TEST_PATH from the output
+  const chromedriverMatch = output.match(/CHROMEDRIVER_TEST_PATH="([^"]+)"/);
+  if (chromedriverMatch) {
+    chromedriverPath = chromedriverMatch[1];
+    debugLog("ChromeDriver path from browser-driver-manager output", chromedriverPath);
   } else {
-    debugLog(".env file not found", { envPath });
+    debugLog("CHROMEDRIVER_TEST_PATH not found in output", { output: output.substring(0, 500) });
   }
 } catch (err) {
-  console.warn("Could not get ChromeDriver path from browser-driver-manager .env file:", err.message);
+  console.warn("Could not get ChromeDriver path from browser-driver-manager:", err.message);
   debugLog("ChromeDriver path error", { error: err.message });
 }
 
