@@ -1,43 +1,3 @@
-const violations = [
-  {
-    id: "meta-viewport",
-    impact: "critical",
-    tags: [
-      "cat.sensory-and-visual-cues",
-      "wcag2aa",
-      "wcag144",
-      "EN-301-549",
-      "EN-9.1.4.4",
-      "ACT",
-    ],
-    description:
-      'Ensure <meta name="viewport"> does not disable text scaling and zooming',
-    help: "Zooming and scaling must not be disabled",
-    helpUrl:
-      "https://dequeuniversity.com/rules/axe/4.10/meta-viewport?application=webdriverjs",
-    nodes: [
-      {
-        any: [
-          {
-            id: "meta-viewport",
-            data: "maximum-scale",
-            relatedNodes: [],
-            impact: "critical",
-            message:
-              "maximum-scale on <meta> tag disables zooming on mobile devices",
-          },
-        ],
-        all: [],
-        none: [],
-        impact: "critical",
-        html: '<meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no,maximum-scale=1">',
-        target: ['meta[name="viewport"]'],
-        failureSummary:
-          "Fix any of the following:\n  maximum-scale on <meta> tag disables zooming on mobile devices",
-      },
-    ],
-  },
-];
 /**
  * Sorts the violations by impact level. `critical` > `serious` > `moderate` > `minor`.
  * @param {Array} violations - The array of violations to sort.
@@ -58,6 +18,29 @@ function sortByImpact(violations) {
   });
 }
 
+/**
+ * Debug logging utility that respects GitHub Actions debug mode
+ * @param {string} message - The debug message to log
+ * @param {any} data - Optional data to log (will be JSON stringified)
+ */
+function debugLog(message, data = null) {
+  // Check if GitHub Actions debug mode is enabled
+  console.log('Debug mode is', process.env.DEBUG, typeof process.env.DEBUG);
+  if (process.env.DEBUG === 'true') {
+    const timestamp = new Date().toISOString();
+    console.log(`🔍 [DEBUG ${timestamp}] ${message}`);
+    
+    if (data !== null) {
+      if (typeof data === 'object') {
+        console.log('🔍 [DEBUG] Data:', JSON.stringify(data, null, 2));
+      } else {
+        console.log('🔍 [DEBUG] Data:', data);
+      }
+    }
+  }
+}
+
 module.exports = {
   sortByImpact,
+  debugLog
 };
