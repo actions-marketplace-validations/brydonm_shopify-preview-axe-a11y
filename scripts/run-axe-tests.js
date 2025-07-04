@@ -57,7 +57,11 @@ debugLog("URL processing results", {
 
 const addUrlToTest = (url, key) => {
   if (url && !urlsToTest[key]) {
-    urlsToTest[key] = url;
+    // Add pb=0 parameter to disable preview banners
+    const separator = url.includes('?') ? '&' : '?';
+    const urlWithPb = `${url}${separator}pb=0`;
+    urlsToTest[key] = urlWithPb;
+    debugLog(`Added URL to test - ${key}`, { originalUrl: url, finalUrl: urlWithPb });
   }
 };
 
