@@ -24,8 +24,6 @@ function sortByImpact(violations) {
  * @param {any} data - Optional data to log (will be JSON stringified)
  */
 function debugLog(message, data = null) {
-  // Check if GitHub Actions debug mode is enabled
-  console.log('Debug mode is', process.env.DEBUG, typeof process.env.DEBUG);
   if (process.env.DEBUG === 'true') {
     const timestamp = new Date().toISOString();
     console.log(`🔍 [DEBUG ${timestamp}] ${message}`);
