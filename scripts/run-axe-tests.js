@@ -117,12 +117,34 @@ for (const { key, url } of urlEntries) {
       : `axe "${url}" --save ${reportPath}`;
     
     debugLog(`Executing axe command for ${key}`, { command: axeCommand });
+    
+    // Check if report file exists before running axe
+    const reportExistsBefore = fs.existsSync(reportPath);
+    debugLog("Report file exists before axe execution", { reportPath, exists: reportExistsBefore });
+    
     execSync(axeCommand, { stdio: "inherit" });
-    console.log(`Saved: ${reportPath}`);
-    debugLog(`Successfully completed axe test for ${key}`, { reportPath });
+    
+    // Check if report file exists after running axe
+    const reportExistsAfter = fs.existsSync(reportPath);
+    debugLog("Report file exists after axe execution", { reportPath, exists: reportExistsAfter });
+    
+    if (reportExistsAfter) {
+      const reportContent = fs.readFileSync(reportPath, 'utf8');
+      debugLog("Report file content length", { reportPath, contentLength: reportContent.length });
+      console.log(`Saved: ${reportPath}`);
+      debugLog(`Successfully completed axe test for ${key}`, { reportPath });
+    } else {
+      console.error(`❌ Report file not created: ${reportPath}`);
+      debugLog("Report file not found after axe execution", { reportPath });
+    }
   } catch (err) {
     console.error(`❌ Error running axe on ${key}:`, err.message);
     debugLog(`Error running axe test for ${key}`, { error: err.message, url });
+    
+    // Check if report file was created despite the error
+    const reportExistsAfterError = fs.existsSync(reportPath);
+    debugLog("Report file exists after error", { reportPath, exists: reportExistsAfterError });
+    
     fs.writeFileSync(
       reportPath,
       JSON.stringify({ error: err.message, url }, null, 2)
