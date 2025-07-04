@@ -6,6 +6,10 @@ inputs:
     description: "Fallback URL if no preview found in PR"
     required: false
     default: ""
+  edit_bot_comment:
+    description: "Edit the last bot comment instead of creating a new one"
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -42,10 +46,44 @@ runs:
         script: |
           const fs = require('fs');
           const commentBody = fs.readFileSync('axe-comment.md', 'utf8');
-
-          await github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-            body: commentBody,
-          });
+          const editBotComment = '${{ inputs.edit_bot_comment }}' === 'true';
+          
+          if (editBotComment) {
+            // Find the last comment from this bot
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100
+            });
+            
+            const botComment = comments.data
+              .filter(comment => comment.user.login === 'github-actions[bot]')
+              .pop();
+            
+            if (botComment) {
+              console.log(`Editing existing comment #${botComment.id}`);
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody,
+              });
+            } else {
+              console.log('No existing bot comment found, creating new comment');
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }
+          } else {
+            console.log('Creating new comment');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: commentBody,
+            });
+          }
