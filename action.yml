@@ -22,7 +22,8 @@ runs:
     - name: Install dependencies
       shell: bash
       run: |
-        npm install -g @axe-core/cli
+        npm install -g @axe-core/cli browser-driver-manager
+        npx browser-driver-manager install chrome
 
     - name: Run accessibility checks
       shell: bash

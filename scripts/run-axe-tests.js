@@ -69,7 +69,7 @@ if (DEFAULT_URL) {
   addUrlToTest(`${DEFAULT_URL}${path}`, "default");
 }
 
-if (urlsToTest.length === 0) {
+if (Object.keys(urlsToTest).length === 0) {
   console.log("No valid URLs found for accessibility testing.");
   process.exit(0);
 }
@@ -80,13 +80,28 @@ const urlEntries = Object.entries(urlsToTest)
     url,
   }));
 
+// Get ChromeDriver path from browser-driver-manager
+let chromedriverPath = "";
+try {
+  chromedriverPath = execSync("npx browser-driver-manager print chrome", { encoding: "utf8" }).trim();
+  debugLog("ChromeDriver path", chromedriverPath);
+} catch (err) {
+  console.warn("Could not get ChromeDriver path from browser-driver-manager:", err.message);
+  debugLog("ChromeDriver path error", { error: err.message });
+}
+
 for (const { key, url } of urlEntries) {
   console.log(`Running axe on ${key}: ${url}`);
   debugLog(`Starting axe test for ${key}`, { url, reportPath: `axe-report-${key}.json` });
   
   const reportPath = `axe-report-${key}.json`;
   try {
-    execSync(`axe ${url} --save ${reportPath}`, { stdio: "inherit" });
+    const axeCommand = chromedriverPath 
+      ? `axe ${url} --save ${reportPath} --chromedriver-path ${chromedriverPath}`
+      : `axe ${url} --save ${reportPath}`;
+    
+    debugLog(`Executing axe command for ${key}`, { command: axeCommand });
+    execSync(axeCommand, { stdio: "inherit" });
     console.log(`Saved: ${reportPath}`);
     debugLog(`Successfully completed axe test for ${key}`, { reportPath });
   } catch (err) {
