@@ -31,30 +31,26 @@ debugLog("Report files status", {
 
 let output = "### 🧪 Axe Accessibility Report\n\n";
 
-if (!currentReport || !previousReport) {
+if (!currentReport) {
   console.error("❌ No axe-report-preview.json file found");
 
-  output += "One or more reports were incomplete.\n";
-  output += `- ${currentReport ? "✅" : "❌"} Preview report\n`;
-
-  if (!currentReport) {
-    output += "  - Ensure a preview URL was included in the PR body\n";
-    output += "  - Try rerunning the action\n";
-    output += "  - Try making the preview URL more prominent (removing markdown)\n";
-    output += "  - Check the action logs for more details\n";
-  }
-
-  output += `- ${previousReport ? "✅" : "❌"} Live report\n`;
+  output += "Preview report was not generated.\n";
+  output += "- ❌ Preview report\n";
+  output += "  - Ensure a preview URL was included in the PR body\n";
+  output += "  - Try rerunning the action\n";
+  output += "  - Try making the preview URL more prominent (removing markdown)\n";
+  output += "  - Check the action logs for more details\n";
 
   if (!previousReport) {
-    output += "  - Ensure the \`default_url\` was passed into the action\n";
+    output += "- ❌ Live report\n";
+    output += "  - Ensure the `default_url` was passed into the action\n";
     output += "  - Try rerunning the action\n";
     output += "  - Check the action logs for more details\n";
   }
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
-  debugLog("Generated comment for incomplete reports", { outputLength: output.length });
+  debugLog("Generated comment for missing preview report", { outputLength: output.length });
 } else {
   const currentViolations = currentReport?.violations
     ? currentReport.violations.flatMap((v) =>
@@ -64,73 +60,110 @@ if (!currentReport || !previousReport) {
         }))
       )
     : [];
-  const previousViolations = previousReport?.violations
-    ? previousReport.violations.flatMap((v) =>
-        v.nodes.map((n) => ({
-          ...v,
-          ...n,
-        }))
-      )
-    : [];
 
-  const newViolations = currentViolations.filter(
-    (v) => !previousViolations.some((pv) => pv.id === v.id)
-  );
+  if (previousReport) {
+    // Both reports exist - compare them
+    const previousViolations = previousReport?.violations
+      ? previousReport.violations.flatMap((v) =>
+          v.nodes.map((n) => ({
+            ...v,
+            ...n,
+          }))
+        )
+      : [];
 
-  output += `- ${newViolations.length} new violations found compared to live\n`;
-  output += `- ${
-    currentViolations.length
-  } violations found on the preview url (\`${
-    currentReport?.url || "unknown"
-  }\`)\n`;
-  output += `- ${
-    previousViolations.length
-  } violations found on the live url (\`${
-    previousReport?.url || "unknown"
-  }\`)\n`;
+    const newViolations = currentViolations.filter(
+      (v) => !previousViolations.some((pv) => pv.id === v.id)
+    );
 
-  const buildViolationsTable = ({ title, violations }) => {
-    if (violations.length === 0) return "";
+    output += `- ${newViolations.length} new violations found compared to live\n`;
+    output += `- ${
+      currentViolations.length
+    } violations found on the preview url (\`${
+      currentReport?.url || "unknown"
+    }\`)\n`;
+    output += `- ${
+      previousViolations.length
+    } violations found on the live url (\`${
+      previousReport?.url || "unknown"
+    }\`)\n`;
 
-    let table = "<details>";
-    table += `<summary>${title}</summary>\n\n`;
-    table += "| Issue | Target | Summary |\n";
-    table += "|-------|--------|---------|\n";
+    const buildViolationsTable = ({ title, violations }) => {
+      if (violations.length === 0) return "";
 
-    for (const n of violations) {
-      const impact = n.impact || "n/a";
-      const help = `[${n.help}](${n.helpUrl})`;
-      const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
-      const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
+      let table = "<details>";
+      table += `<summary>${title}</summary>\n\n`;
+      table += "| Issue | Target | Summary |\n";
+      table += "|-------|--------|---------|\n";
 
-      table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
+      for (const n of violations) {
+        const impact = n.impact || "n/a";
+        const help = `[${n.help}](${n.helpUrl})`;
+        const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
+        const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
+
+        table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
+      };
+
+      table += "</details>\n\n";
+      return table;
     };
 
-    table += "</details>\n\n";
-    return table;
-  };
+    output += buildViolationsTable({
+      title: "⚠️ New violations compared to live",
+      violations: sortByImpact(newViolations),
+    });
 
-  output += buildViolationsTable({
-    title: "⚠️ New violations compared to live",
-    violations: sortByImpact(newViolations),
-  });
+    output += buildViolationsTable({
+      title: "🔗 All preview link violations",
+      violations: sortByImpact(currentViolations),
+    });
 
-  output += buildViolationsTable({
-    title: "🔗 All preview link violations",
-    violations: sortByImpact(currentViolations),
-  });
+    output += buildViolationsTable({
+      title: "🧪 All live violations",
+      violations: sortByImpact(previousViolations),
+    });
+  } else {
+    // Only preview report exists - show just preview violations
+    output += `- ${
+      currentViolations.length
+    } violations found on the preview url (\`${
+      currentReport?.url || "unknown"
+    }\`)\n`;
+    output += "- No live report available for comparison (no `default_url` provided)\n\n";
 
-  output += buildViolationsTable({
-    title: "🧪 All live violations",
-    violations: sortByImpact(previousViolations),
-  });
+    const buildViolationsTable = ({ title, violations }) => {
+      if (violations.length === 0) return "";
+
+      let table = "<details>";
+      table += `<summary>${title}</summary>\n\n`;
+      table += "| Issue | Target | Summary |\n";
+      table += "|-------|--------|---------|\n";
+
+      for (const n of violations) {
+        const impact = n.impact || "n/a";
+        const help = `[${n.help}](${n.helpUrl})`;
+        const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
+        const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
+
+        table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
+      };
+
+      table += "</details>\n\n";
+      return table;
+    };
+
+    output += buildViolationsTable({
+      title: "🔗 All preview violations",
+      violations: sortByImpact(currentViolations),
+    });
+  }
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
-  debugLog("Generated comment for complete reports", { 
+  debugLog("Generated comment for preview report", { 
     outputLength: output.length,
-    newViolationsCount: newViolations.length,
     currentViolationsCount: currentViolations.length,
-    previousViolationsCount: previousViolations.length
+    hasPreviousReport: !!previousReport
   });
 }

@@ -9,7 +9,7 @@ const PATH_REGEX = /https:\/\/[^\s]+/g;
 debugLog("Environment variables", {
   PR_BODY: PR_BODY.substring(0, 200) + (PR_BODY.length > 200 ? "..." : ""),
   DEFAULT_URL,
-  GITHUB_EVENT_NAME: process.env.GITHUB_EVENT_NAME
+  GITHUB_EVENT_NAME: process.env.GITHUB_EVENT_NAME,
 });
 
 const allUrls = PR_BODY.match(PATH_REGEX) || [];
@@ -32,11 +32,14 @@ if (rawPreviewUrl) {
     if (previewThemeId) {
       previewUrl = `${parsed.origin}?preview_theme_id=${previewThemeId}`;
     }
-      } catch (err) {
-      console.warn("Invalid preview URL:", rawPreviewUrl);
-      debugLog("Error parsing preview URL", { error: err.message, url: rawPreviewUrl });
-    }
+  } catch (err) {
+    console.warn("Invalid preview URL:", rawPreviewUrl);
+    debugLog("Error parsing preview URL", {
+      error: err.message,
+      url: rawPreviewUrl,
+    });
   }
+}
 
 debugLog("Final preview URL", previewUrl);
 
@@ -52,16 +55,19 @@ debugLog("URL processing results", {
   previewUrl,
   defaultUrl: DEFAULT_URL,
   path,
-  urlsToTest: Object.keys(urlsToTest)
+  urlsToTest: Object.keys(urlsToTest),
 });
 
 const addUrlToTest = (url, key) => {
   if (url?.trim() && !urlsToTest[key]) {
     // Add pb=0 parameter to disable preview banners
-    const separator = url.includes('?') ? '&' : '?';
+    const separator = url.includes("?") ? "&" : "?";
     const urlWithPb = `${url}${separator}pb=0`;
     urlsToTest[key] = urlWithPb;
-    debugLog(`Added URL to test - ${key}`, { originalUrl: url, finalUrl: urlWithPb });
+    debugLog(`Added URL to test - ${key}`, {
+      originalUrl: url,
+      finalUrl: urlWithPb,
+    });
   } else {
     const reason = !url || !url.trim() ? "empty" : "already exists";
     debugLog(`Skipping URL for ${key}`, { url, reason });
@@ -81,59 +87,80 @@ if (Object.keys(urlsToTest).length === 0) {
   process.exit(0);
 }
 
-const urlEntries = Object.entries(urlsToTest)
-  .map(([key, url]) => ({
-    key,
-    url,
-  }));
+const urlEntries = Object.entries(urlsToTest).map(([key, url]) => ({
+  key,
+  url,
+}));
 
 // Get ChromeDriver path from browser-driver-manager
 let chromedriverPath = "";
 try {
   const browserDriverOutput = process.env.BROWSER_DRIVER_OUTPUT || "";
-  
+
   if (browserDriverOutput) {
     // Parse the CHROMEDRIVER_TEST_PATH from the output
-    const chromedriverMatch = browserDriverOutput.match(/CHROMEDRIVER_TEST_PATH="([^"]+)"/);
+    const chromedriverMatch = browserDriverOutput.match(
+      /CHROMEDRIVER_TEST_PATH="([^"]+)"/
+    );
     if (chromedriverMatch) {
       chromedriverPath = chromedriverMatch[1];
-      debugLog("ChromeDriver path from browser-driver-manager output", chromedriverPath);
+      debugLog(
+        "ChromeDriver path from browser-driver-manager output",
+        chromedriverPath
+      );
     } else {
-      debugLog("CHROMEDRIVER_TEST_PATH not found in output", { output: browserDriverOutput.substring(0, 500) });
+      debugLog("CHROMEDRIVER_TEST_PATH not found in output", {
+        output: browserDriverOutput.substring(0, 500),
+      });
     }
   } else {
     debugLog("BROWSER_DRIVER_OUTPUT environment variable not set");
   }
 } catch (err) {
-  console.warn("Could not get ChromeDriver path from browser-driver-manager:", err.message);
+  console.warn(
+    "Could not get ChromeDriver path from browser-driver-manager:",
+    err.message
+  );
   debugLog("ChromeDriver path error", { error: err.message });
 }
 
 for (const { key, url } of urlEntries) {
   console.log(`Running axe on ${key}: ${url}`);
-  debugLog(`Starting axe test for ${key}`, { url, reportPath: `axe-report-${key}.json` });
-  
+  debugLog(`Starting axe test for ${key}`, {
+    url,
+    reportPath: `axe-report-${key}.json`,
+  });
+
   const reportPath = `axe-report-${key}.json`;
   try {
-    const axeCommand = chromedriverPath 
+    const axeCommand = chromedriverPath
       ? `axe "${url}" --save ${reportPath} --chromedriver-path ${chromedriverPath}`
       : `axe "${url}" --save ${reportPath}`;
-    
+
     debugLog(`Executing axe command for ${key}`, { command: axeCommand });
-    
+
     // Check if report file exists before running axe
     const reportExistsBefore = fs.existsSync(reportPath);
-    debugLog("Report file exists before axe execution", { reportPath, exists: reportExistsBefore });
-    
+    debugLog("Report file exists before axe execution", {
+      reportPath,
+      exists: reportExistsBefore,
+    });
+
     execSync(axeCommand, { stdio: "inherit" });
-    
+
     // Check if report file exists after running axe
     const reportExistsAfter = fs.existsSync(reportPath);
-    debugLog("Report file exists after axe execution", { reportPath, exists: reportExistsAfter });
-    
+    debugLog("Report file exists after axe execution", {
+      reportPath,
+      exists: reportExistsAfter,
+    });
+
     if (reportExistsAfter) {
-      const reportContent = fs.readFileSync(reportPath, 'utf8');
-      debugLog("Report file content length", { reportPath, contentLength: reportContent.length });
+      const reportContent = fs.readFileSync(reportPath, "utf8");
+      debugLog("Report file content length", {
+        reportPath,
+        contentLength: reportContent.length,
+      });
       console.log(`Saved: ${reportPath}`);
       debugLog(`Successfully completed axe test for ${key}`, { reportPath });
     } else {
@@ -143,11 +170,14 @@ for (const { key, url } of urlEntries) {
   } catch (err) {
     console.error(`❌ Error running axe on ${key}:`, err.message);
     debugLog(`Error running axe test for ${key}`, { error: err.message, url });
-    
+
     // Check if report file was created despite the error
     const reportExistsAfterError = fs.existsSync(reportPath);
-    debugLog("Report file exists after error", { reportPath, exists: reportExistsAfterError });
-    
+    debugLog("Report file exists after error", {
+      reportPath,
+      exists: reportExistsAfterError,
+    });
+
     fs.writeFileSync(
       reportPath,
       JSON.stringify({ error: err.message, url }, null, 2)
