@@ -87,10 +87,21 @@ const urlEntries = Object.entries(urlsToTest)
 // Get ChromeDriver path from browser-driver-manager
 let chromedriverPath = "";
 try {
-  chromedriverPath = execSync("npx browser-driver-manager print chrome", { encoding: "utf8" }).trim();
-  debugLog("ChromeDriver path", chromedriverPath);
+  const homeDir = process.env.HOME || process.env.USERPROFILE;
+  const envPath = `${homeDir}/.browser-driver-manager/.env`;
+  
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    const chromedriverMatch = envContent.match(/CHROMEDRIVER_TEST_PATH=(.+)/);
+    if (chromedriverMatch) {
+      chromedriverPath = chromedriverMatch[1].trim();
+      debugLog("ChromeDriver path from .env file", chromedriverPath);
+    }
+  } else {
+    debugLog(".env file not found", { envPath });
+  }
 } catch (err) {
-  console.warn("Could not get ChromeDriver path from browser-driver-manager:", err.message);
+  console.warn("Could not get ChromeDriver path from browser-driver-manager .env file:", err.message);
   debugLog("ChromeDriver path error", { error: err.message });
 }
 
@@ -101,8 +112,8 @@ for (const { key, url } of urlEntries) {
   const reportPath = `axe-report-${key}.json`;
   try {
     const axeCommand = chromedriverPath 
-      ? `axe ${url} --save ${reportPath} --chromedriver-path ${chromedriverPath}`
-      : `axe ${url} --save ${reportPath}`;
+      ? `axe "${url}" --save ${reportPath} --chromedriver-path ${chromedriverPath}`
+      : `axe "${url}" --save ${reportPath}`;
     
     debugLog(`Executing axe command for ${key}`, { command: axeCommand });
     execSync(axeCommand, { stdio: "inherit" });
