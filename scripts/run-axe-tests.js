@@ -87,16 +87,19 @@ const urlEntries = Object.entries(urlsToTest)
 // Get ChromeDriver path from browser-driver-manager
 let chromedriverPath = "";
 try {
-  // Run browser-driver-manager install chrome to get the paths
-  const output = execSync("npx browser-driver-manager install chrome", { encoding: "utf8" });
+  const browserDriverOutput = process.env.BROWSER_DRIVER_OUTPUT || "";
   
-  // Parse the CHROMEDRIVER_TEST_PATH from the output
-  const chromedriverMatch = output.match(/CHROMEDRIVER_TEST_PATH="([^"]+)"/);
-  if (chromedriverMatch) {
-    chromedriverPath = chromedriverMatch[1];
-    debugLog("ChromeDriver path from browser-driver-manager output", chromedriverPath);
+  if (browserDriverOutput) {
+    // Parse the CHROMEDRIVER_TEST_PATH from the output
+    const chromedriverMatch = browserDriverOutput.match(/CHROMEDRIVER_TEST_PATH="([^"]+)"/);
+    if (chromedriverMatch) {
+      chromedriverPath = chromedriverMatch[1];
+      debugLog("ChromeDriver path from browser-driver-manager output", chromedriverPath);
+    } else {
+      debugLog("CHROMEDRIVER_TEST_PATH not found in output", { output: browserDriverOutput.substring(0, 500) });
+    }
   } else {
-    debugLog("CHROMEDRIVER_TEST_PATH not found in output", { output: output.substring(0, 500) });
+    debugLog("BROWSER_DRIVER_OUTPUT environment variable not set");
   }
 } catch (err) {
   console.warn("Could not get ChromeDriver path from browser-driver-manager:", err.message);

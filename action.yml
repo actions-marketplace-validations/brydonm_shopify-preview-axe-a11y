@@ -23,7 +23,10 @@ runs:
       shell: bash
       run: |
         npm install -g @axe-core/cli browser-driver-manager
-        npx browser-driver-manager install chrome
+        BROWSER_DRIVER_OUTPUT=$(npx browser-driver-manager install chrome)
+        echo "BROWSER_DRIVER_OUTPUT<<EOF" >> $GITHUB_ENV
+        echo "$BROWSER_DRIVER_OUTPUT" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
 
     - name: Run accessibility checks
       shell: bash
@@ -33,6 +36,7 @@ runs:
         PR_BODY: "${{ github.event.pull_request.body }}"
         DEFAULT_URL: "${{ inputs.default_url }}"
         DEBUG: "${{ runner.debug == '1' }}"
+        BROWSER_DRIVER_OUTPUT: ${{ env.BROWSER_DRIVER_OUTPUT }}
 
     - name: Generate PR comment markdown
       shell: bash
