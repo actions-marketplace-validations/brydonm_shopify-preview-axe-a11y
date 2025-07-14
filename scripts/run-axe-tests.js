@@ -60,12 +60,15 @@ debugLog("URL processing results", {
 
 const addUrlToTest = (url, key) => {
   if (url?.trim() && !urlsToTest[key]) {
-    // Add pb=0 parameter to disable preview banners
-    const separator = url.includes("?") ? "&" : "?";
-    const urlWithPb = `${url}${separator}pb=0`;
+    let cleanUrl = url.trim();
+    cleanUrl = cleanUrl.replace(/[),]$/, "");
+
+    const separator = cleanUrl.includes("?") ? "&" : "?";
+    const urlWithPb = `${cleanUrl}${separator}pb=0`;
     urlsToTest[key] = urlWithPb;
     debugLog(`Added URL to test - ${key}`, {
       originalUrl: url,
+      cleanUrl,
       finalUrl: urlWithPb,
     });
   } else {
