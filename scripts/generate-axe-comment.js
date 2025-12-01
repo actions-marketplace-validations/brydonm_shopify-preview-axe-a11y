@@ -19,6 +19,19 @@ const impactEmojis = {
   info: "ℹ️",
 };
 
+/**
+ * Removes pb=0 parameter from URL for display purposes
+ * @param {string} url - The URL to clean
+ * @returns {string} - The URL without pb=0 parameter
+ */
+const removePbParam = (url) => {
+  if (!url) return url;
+  const urlObj = new URL(url);
+  urlObj.searchParams.delete("pb");
+  const cleaned = urlObj.toString();
+  return cleaned.replace(/\?$/, "");
+};
+
 const currentReport = readReport("axe-report-preview.json");
 const previousReport = readReport("axe-report-default.json");
 
@@ -26,7 +39,7 @@ debugLog("Report files status", {
   currentReportExists: !!currentReport,
   previousReportExists: !!previousReport,
   currentReportUrl: currentReport?.url,
-  previousReportUrl: previousReport?.url
+  previousReportUrl: previousReport?.url,
 });
 
 let output = "### 🧪 Axe Accessibility Report\n\n";
@@ -38,7 +51,8 @@ if (!currentReport) {
   output += "- ❌ Preview report\n";
   output += "  - Ensure a preview URL was included in the PR body\n";
   output += "  - Try rerunning the action\n";
-  output += "  - Try making the preview URL more prominent (removing markdown)\n";
+  output +=
+    "  - Try making the preview URL more prominent (removing markdown)\n";
   output += "  - Check the action logs for more details\n";
 
   if (!previousReport) {
@@ -50,7 +64,9 @@ if (!currentReport) {
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
-  debugLog("Generated comment for missing preview report", { outputLength: output.length });
+  debugLog("Generated comment for missing preview report", {
+    outputLength: output.length,
+  });
 } else {
   const currentViolations = currentReport?.violations
     ? currentReport.violations.flatMap((v) =>
@@ -80,12 +96,12 @@ if (!currentReport) {
     output += `- ${
       currentViolations.length
     } violations found on the preview url (\`${
-      currentReport?.url || "unknown"
+      removePbParam(currentReport?.url) || "unknown"
     }\`)\n`;
     output += `- ${
       previousViolations.length
     } violations found on the live url (\`${
-      previousReport?.url || "unknown"
+      removePbParam(previousReport?.url) || "unknown"
     }\`)\n`;
 
     const buildViolationsTable = ({ title, violations }) => {
@@ -103,7 +119,7 @@ if (!currentReport) {
         const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
 
         table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
-      };
+      }
 
       table += "</details>\n\n";
       return table;
@@ -128,9 +144,10 @@ if (!currentReport) {
     output += `- ${
       currentViolations.length
     } violations found on the preview url (\`${
-      currentReport?.url || "unknown"
+      removePbParam(currentReport?.url) || "unknown"
     }\`)\n`;
-    output += "- No live report available for comparison (no `default_url` provided)\n\n";
+    output +=
+      "- No live report available for comparison (no `default_url` provided)\n\n";
 
     const buildViolationsTable = ({ title, violations }) => {
       if (violations.length === 0) return "";
@@ -147,7 +164,7 @@ if (!currentReport) {
         const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
 
         table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
-      };
+      }
 
       table += "</details>\n\n";
       return table;
@@ -161,9 +178,9 @@ if (!currentReport) {
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
-  debugLog("Generated comment for preview report", { 
+  debugLog("Generated comment for preview report", {
     outputLength: output.length,
     currentViolationsCount: currentViolations.length,
-    hasPreviousReport: !!previousReport
+    hasPreviousReport: !!previousReport,
   });
 }

@@ -4,7 +4,7 @@ const { debugLog } = require("./utils");
 
 const PR_BODY = process.env.PR_BODY || "";
 const DEFAULT_URL = process.env.DEFAULT_URL || "";
-const PATH_REGEX = /https:\/\/[^\s]+/g;
+const PATH_REGEX = /https:\/\/[^\s\)\]\}]+/g;
 
 debugLog("Environment variables", {
   PR_BODY: PR_BODY.substring(0, 200) + (PR_BODY.length > 200 ? "..." : ""),
@@ -23,14 +23,19 @@ const rawPreviewUrl =
 
 debugLog("Raw preview URL found", rawPreviewUrl);
 
+let previewPathname = "";
 let previewUrl = "";
+
 if (rawPreviewUrl) {
   try {
     const parsed = new URL(rawPreviewUrl);
+    previewPathname = parsed.pathname;
     const previewThemeId = parsed.searchParams.get("preview_theme_id");
 
     if (previewThemeId) {
-      previewUrl = `${parsed.origin}?preview_theme_id=${previewThemeId}`;
+      previewUrl = `${parsed.origin}${previewPathname}?preview_theme_id=${previewThemeId}`;
+    } else if (parsed.hostname.includes("shopifypreview.com")) {
+      previewUrl = rawPreviewUrl;
     }
   } catch (err) {
     console.warn("Invalid preview URL:", rawPreviewUrl);
@@ -42,26 +47,40 @@ if (rawPreviewUrl) {
 }
 
 debugLog("Final preview URL", previewUrl);
-
-const path = previewUrl ? new URL(previewUrl).pathname : "";
+debugLog("Preview pathname", previewPathname);
 
 console.log("Preview URL:", previewUrl);
 console.log("Default URL:", DEFAULT_URL);
-console.log("Path:", path);
+console.log("Path:", previewPathname);
 
 const urlsToTest = {};
 
 debugLog("URL processing results", {
   previewUrl,
   defaultUrl: DEFAULT_URL,
-  path,
+  previewPathname,
   urlsToTest: Object.keys(urlsToTest),
 });
+
+const isValidUrl = (urlString) => {
+  try {
+    new URL(urlString);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const addUrlToTest = (url, key) => {
   if (url?.trim() && !urlsToTest[key]) {
     let cleanUrl = url.trim();
-    cleanUrl = cleanUrl.replace(/[),]$/, "");
+    cleanUrl = cleanUrl.replace(/[),\.]+$/, "");
+
+    if (!isValidUrl(cleanUrl)) {
+      console.warn(`Invalid URL for ${key}: ${cleanUrl}`);
+      debugLog(`Skipping invalid URL for ${key}`, { url: cleanUrl });
+      return;
+    }
 
     const separator = cleanUrl.includes("?") ? "&" : "?";
     const urlWithPb = `${cleanUrl}${separator}pb=0`;
@@ -82,7 +101,21 @@ if (previewUrl) {
 }
 
 if (DEFAULT_URL) {
-  addUrlToTest(`${DEFAULT_URL}${path}`, "default");
+  try {
+    const defaultUrlObj = new URL(DEFAULT_URL);
+    if (previewPathname) {
+      defaultUrlObj.pathname = previewPathname;
+    }
+    const defaultUrlWithPath = defaultUrlObj.toString();
+    addUrlToTest(defaultUrlWithPath, "default");
+  } catch (err) {
+    console.warn("Invalid DEFAULT_URL:", DEFAULT_URL);
+    debugLog("Error processing DEFAULT_URL", {
+      error: err.message,
+      url: DEFAULT_URL,
+    });
+    addUrlToTest(DEFAULT_URL, "default");
+  }
 }
 
 if (Object.keys(urlsToTest).length === 0) {
