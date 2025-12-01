@@ -4,12 +4,12 @@ const { sortByImpact, debugLog } = require("./utils");
 const readReport = (filename) => {
   if (!fs.existsSync(filename)) return null;
   const data = JSON.parse(fs.readFileSync(filename, "utf8"));
-  
+
   // Handle password-protected reports
   if (data.passwordProtected) {
     return { ...data, passwordProtected: true, violations: [] };
   }
-  
+
   return Array.isArray(data.violations)
     ? data
     : Array.isArray(data)
@@ -50,7 +50,32 @@ debugLog("Report files status", {
 
 let output = "### 🧪 Axe Accessibility Report\n\n";
 
-if (!currentReport) {
+// Check if preview report is password protected first
+if (currentReport?.passwordProtected) {
+  output += "⚠️ Preview URL is password protected.\n";
+  output += "- 🔒 Preview report\n";
+  if (currentReport?.url) {
+    output += `  - URL used: \`${removePbParam(currentReport.url)}\`\n`;
+  }
+  output += "  - The preview URL redirects to a password protection page\n";
+  output +=
+    "  - Remove password protection or use a publicly accessible preview URL\n";
+
+  // Check if live report also exists and is password protected
+  if (previousReport?.passwordProtected) {
+    output += "- 🔒 Live report\n";
+    if (previousReport?.url) {
+      output += `  - URL used: \`${removePbParam(previousReport.url)}\`\n`;
+    }
+    output += "  - The live URL also redirects to a password protection page\n";
+  }
+
+  fs.writeFileSync("axe-comment.md", output);
+  console.log("✅ axe-comment.md generated");
+  debugLog("Generated comment for password protected preview", {
+    outputLength: output.length,
+  });
+} else if (!currentReport) {
   console.error("❌ No axe-report-preview.json file found");
 
   let attemptedUrls = {};
@@ -64,28 +89,17 @@ if (!currentReport) {
     debugLog("Error reading attempted-urls.json", { error: err.message });
   }
 
-  // Check if report exists but is password protected
-  if (currentReport?.passwordProtected) {
-    output += "⚠️ Preview URL is password protected.\n";
-    output += "- 🔒 Preview report\n";
-    if (currentReport?.url) {
-      output += `  - URL used: \`${removePbParam(currentReport.url)}\`\n`;
-    }
-    output += "  - The preview URL redirects to a password protection page\n";
-    output += "  - Remove password protection or use a publicly accessible preview URL\n";
-  } else {
-    output += "Preview report was not generated.\n";
-    output += "- ❌ Preview report\n";
-    if (attemptedUrls.preview) {
-      output += `  - URL used: \`${attemptedUrls.preview}\`\n`;
-    }
-    output +=
-      "  - Ensure a preview URL with `preview_theme_id` was included in the PR body\n";
-    output += "  - Try rerunning the action\n";
-    output +=
-      "  - Try making the preview URL more prominent (removing markdown)\n";
-    output += "  - Check the action logs for more details\n";
+  output += "Preview report was not generated.\n";
+  output += "- ❌ Preview report\n";
+  if (attemptedUrls.preview) {
+    output += `  - URL used: \`${attemptedUrls.preview}\`\n`;
   }
+  output +=
+    "  - Ensure a preview URL with `preview_theme_id` was included in the PR body\n";
+  output += "  - Try rerunning the action\n";
+  output +=
+    "  - Try making the preview URL more prominent (removing markdown)\n";
+  output += "  - Check the action logs for more details\n";
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
@@ -110,7 +124,8 @@ if (!currentReport) {
       } violations found on the preview url (\`${
         removePbParam(currentReport?.url) || "unknown"
       }\`)\n`;
-      output += "- ⚠️ Live URL is password protected, comparison unavailable\n\n";
+      output +=
+        "- ⚠️ Live URL is password protected, comparison unavailable\n\n";
 
       const buildViolationsTable = ({ title, violations }) => {
         if (violations.length === 0) return "";
@@ -124,7 +139,9 @@ if (!currentReport) {
           const impact = n.impact || "n/a";
           const help = `[${n.help}](${n.helpUrl})`;
           const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
-          const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
+          const failureSummary = n.any
+            .map((a) => `- ${a.message}`)
+            .join("<br>");
 
           table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
         }
@@ -151,48 +168,50 @@ if (!currentReport) {
         (v) => !previousViolations.some((pv) => pv.id === v.id)
       );
 
-    output += `- ${newViolations.length} new violations found compared to live\n`;
-    output += `- ${
-      currentViolations.length
-    } violations found on the preview url (\`${
-      removePbParam(currentReport?.url) || "unknown"
-    }\`)\n`;
-    output += `- ${
-      previousViolations.length
-    } violations found on the live url (\`${
-      removePbParam(previousReport?.url) || "unknown"
-    }\`)\n`;
+      output += `- ${newViolations.length} new violations found compared to live\n`;
+      output += `- ${
+        currentViolations.length
+      } violations found on the preview url (\`${
+        removePbParam(currentReport?.url) || "unknown"
+      }\`)\n`;
+      output += `- ${
+        previousViolations.length
+      } violations found on the live url (\`${
+        removePbParam(previousReport?.url) || "unknown"
+      }\`)\n`;
 
-    const buildViolationsTable = ({ title, violations }) => {
-      if (violations.length === 0) return "";
+      const buildViolationsTable = ({ title, violations }) => {
+        if (violations.length === 0) return "";
 
-      let table = "<details>";
-      table += `<summary>${title}</summary>\n\n`;
-      table += "| Issue | Target | Summary |\n";
-      table += "|-------|--------|---------|\n";
+        let table = "<details>";
+        table += `<summary>${title}</summary>\n\n`;
+        table += "| Issue | Target | Summary |\n";
+        table += "|-------|--------|---------|\n";
 
-      for (const n of violations) {
-        const impact = n.impact || "n/a";
-        const help = `[${n.help}](${n.helpUrl})`;
-        const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
-        const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
+        for (const n of violations) {
+          const impact = n.impact || "n/a";
+          const help = `[${n.help}](${n.helpUrl})`;
+          const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
+          const failureSummary = n.any
+            .map((a) => `- ${a.message}`)
+            .join("<br>");
 
-        table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
-      }
+          table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
+        }
 
-      table += "</details>\n\n";
-      return table;
-    };
+        table += "</details>\n\n";
+        return table;
+      };
 
-    output += buildViolationsTable({
-      title: "⚠️ New violations compared to live",
-      violations: sortByImpact(newViolations),
-    });
+      output += buildViolationsTable({
+        title: "⚠️ New violations compared to live",
+        violations: sortByImpact(newViolations),
+      });
 
-    output += buildViolationsTable({
-      title: "🔗 All preview link violations",
-      violations: sortByImpact(currentViolations),
-    });
+      output += buildViolationsTable({
+        title: "🔗 All preview link violations",
+        violations: sortByImpact(currentViolations),
+      });
 
       output += buildViolationsTable({
         title: "🧪 All live violations",
