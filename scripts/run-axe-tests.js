@@ -147,53 +147,17 @@ const urlEntries = Object.entries(urlsToTest).map(([key, url]) => ({
 // Store attempted URLs for error reporting
 fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
 
-// Get ChromeDriver path from browser-driver-manager
-let chromedriverPath = "";
-try {
-  const browserDriverOutput = process.env.BROWSER_DRIVER_OUTPUT || "";
-
-  if (browserDriverOutput) {
-    // Parse the CHROMEDRIVER_TEST_PATH from the output
-    const chromedriverMatch = browserDriverOutput.match(
-      /CHROMEDRIVER_TEST_PATH="([^"]+)"/
-    );
-    if (chromedriverMatch) {
-      chromedriverPath = chromedriverMatch[1];
-      debugLog(
-        "ChromeDriver path from browser-driver-manager output",
-        chromedriverPath
-      );
-    } else {
-      debugLog("CHROMEDRIVER_TEST_PATH not found in output", {
-        output: browserDriverOutput.substring(0, 500),
-      });
-    }
-  } else {
-    debugLog("BROWSER_DRIVER_OUTPUT environment variable not set");
-  }
-} catch (err) {
-  console.warn(
-    "Could not get ChromeDriver path from browser-driver-manager:",
-    err.message
-  );
-  debugLog("ChromeDriver path error", { error: err.message });
-}
-
+// Check for password protection before running any tests
 (async () => {
-  for (const { key, url } of urlEntries) {
-    console.log(`Running axe on ${key}: ${url}`);
-    debugLog(`Starting axe test for ${key}`, {
-      url,
-      reportPath: `axe-report-${key}.json`,
-    });
+  console.log("Checking for password protection...");
 
-    // Check for password protection
+  for (const { key, url } of urlEntries) {
     const isProtected = await isPasswordProtected(url);
     if (isProtected) {
       console.warn(
         `⚠️  ${key} URL is password protected, skipping accessibility test`
       );
-      debugLog(`Skipping password protected URL for ${key}`, { url });
+      debugLog(`Password protected URL detected for ${key}`, { url });
 
       // Create a report indicating password protection
       const reportPath = `axe-report-${key}.json`;
@@ -209,10 +173,68 @@ try {
           2
         )
       );
-      continue;
+
+      // If preview URL is password protected, exit early
+      if (key === "preview") {
+        console.error("❌ Preview URL is password protected. Exiting early.");
+        process.exit(0);
+      }
+    }
+  }
+
+  // Get ChromeDriver path from browser-driver-manager
+  let chromedriverPath = "";
+  try {
+    const browserDriverOutput = process.env.BROWSER_DRIVER_OUTPUT || "";
+
+    if (browserDriverOutput) {
+      // Parse the CHROMEDRIVER_TEST_PATH from the output
+      const chromedriverMatch = browserDriverOutput.match(
+        /CHROMEDRIVER_TEST_PATH="([^"]+)"/
+      );
+      if (chromedriverMatch) {
+        chromedriverPath = chromedriverMatch[1];
+        debugLog(
+          "ChromeDriver path from browser-driver-manager output",
+          chromedriverPath
+        );
+      } else {
+        debugLog("CHROMEDRIVER_TEST_PATH not found in output", {
+          output: browserDriverOutput.substring(0, 500),
+        });
+      }
+    } else {
+      debugLog("BROWSER_DRIVER_OUTPUT environment variable not set");
+    }
+  } catch (err) {
+    console.warn(
+      "Could not get ChromeDriver path from browser-driver-manager:",
+      err.message
+    );
+    debugLog("ChromeDriver path error", { error: err.message });
+  }
+
+  for (const { key, url } of urlEntries) {
+    // Skip if already marked as password protected
+    const reportPath = `axe-report-${key}.json`;
+    if (fs.existsSync(reportPath)) {
+      try {
+        const existingReport = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+        if (existingReport.passwordProtected) {
+          console.log(`Skipping ${key} (password protected)`);
+          continue;
+        }
+      } catch {
+        // If we can't parse it, continue with the test
+      }
     }
 
-    const reportPath = `axe-report-${key}.json`;
+    console.log(`Running axe on ${key}: ${url}`);
+    debugLog(`Starting axe test for ${key}`, {
+      url,
+      reportPath,
+    });
+
     try {
       const axeCommand = chromedriverPath
         ? `axe "${url}" --save ${reportPath} --chromedriver-path ${chromedriverPath}`
