@@ -4,6 +4,12 @@ const { sortByImpact, debugLog } = require("./utils");
 const readReport = (filename) => {
   if (!fs.existsSync(filename)) return null;
   const data = JSON.parse(fs.readFileSync(filename, "utf8"));
+  
+  // Handle password-protected reports
+  if (data.passwordProtected) {
+    return { ...data, passwordProtected: true, violations: [] };
+  }
+  
   return Array.isArray(data.violations)
     ? data
     : Array.isArray(data)
@@ -58,17 +64,28 @@ if (!currentReport) {
     debugLog("Error reading attempted-urls.json", { error: err.message });
   }
 
-  output += "Preview report was not generated.\n";
-  output += "- ❌ Preview report\n";
-  if (attemptedUrls.preview) {
-    output += `  - URL used: \`${attemptedUrls.preview}\`\n`;
+  // Check if report exists but is password protected
+  if (currentReport?.passwordProtected) {
+    output += "⚠️ Preview URL is password protected.\n";
+    output += "- 🔒 Preview report\n";
+    if (currentReport?.url) {
+      output += `  - URL used: \`${removePbParam(currentReport.url)}\`\n`;
+    }
+    output += "  - The preview URL redirects to a password protection page\n";
+    output += "  - Remove password protection or use a publicly accessible preview URL\n";
+  } else {
+    output += "Preview report was not generated.\n";
+    output += "- ❌ Preview report\n";
+    if (attemptedUrls.preview) {
+      output += `  - URL used: \`${attemptedUrls.preview}\`\n`;
+    }
+    output +=
+      "  - Ensure a preview URL with `preview_theme_id` was included in the PR body\n";
+    output += "  - Try rerunning the action\n";
+    output +=
+      "  - Try making the preview URL more prominent (removing markdown)\n";
+    output += "  - Check the action logs for more details\n";
   }
-  output +=
-    "  - Ensure a preview URL with `preview_theme_id` was included in the PR body\n";
-  output += "  - Try rerunning the action\n";
-  output +=
-    "  - Try making the preview URL more prominent (removing markdown)\n";
-  output += "  - Check the action logs for more details\n";
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
@@ -86,18 +103,53 @@ if (!currentReport) {
     : [];
 
   if (previousReport) {
-    const previousViolations = previousReport?.violations
-      ? previousReport.violations.flatMap((v) =>
-          v.nodes.map((n) => ({
-            ...v,
-            ...n,
-          }))
-        )
-      : [];
+    // Skip comparison if live report is password protected
+    if (previousReport.passwordProtected) {
+      output += `- ${
+        currentViolations.length
+      } violations found on the preview url (\`${
+        removePbParam(currentReport?.url) || "unknown"
+      }\`)\n`;
+      output += "- ⚠️ Live URL is password protected, comparison unavailable\n\n";
 
-    const newViolations = currentViolations.filter(
-      (v) => !previousViolations.some((pv) => pv.id === v.id)
-    );
+      const buildViolationsTable = ({ title, violations }) => {
+        if (violations.length === 0) return "";
+
+        let table = "<details>";
+        table += `<summary>${title}</summary>\n\n`;
+        table += "| Issue | Target | Summary |\n";
+        table += "|-------|--------|---------|\n";
+
+        for (const n of violations) {
+          const impact = n.impact || "n/a";
+          const help = `[${n.help}](${n.helpUrl})`;
+          const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
+          const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
+
+          table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
+        }
+
+        table += "</details>\n\n";
+        return table;
+      };
+
+      output += buildViolationsTable({
+        title: "🔗 All preview violations",
+        violations: sortByImpact(currentViolations),
+      });
+    } else {
+      const previousViolations = previousReport?.violations
+        ? previousReport.violations.flatMap((v) =>
+            v.nodes.map((n) => ({
+              ...v,
+              ...n,
+            }))
+          )
+        : [];
+
+      const newViolations = currentViolations.filter(
+        (v) => !previousViolations.some((pv) => pv.id === v.id)
+      );
 
     output += `- ${newViolations.length} new violations found compared to live\n`;
     output += `- ${
@@ -142,10 +194,11 @@ if (!currentReport) {
       violations: sortByImpact(currentViolations),
     });
 
-    output += buildViolationsTable({
-      title: "🧪 All live violations",
-      violations: sortByImpact(previousViolations),
-    });
+      output += buildViolationsTable({
+        title: "🧪 All live violations",
+        violations: sortByImpact(previousViolations),
+      });
+    }
   } else {
     output += `- ${
       currentViolations.length

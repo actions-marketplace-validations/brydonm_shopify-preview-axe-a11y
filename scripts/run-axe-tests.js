@@ -2,6 +2,32 @@ const { execSync } = require("node:child_process");
 const fs = require("node:fs");
 const { debugLog } = require("./utils");
 
+/**
+ * Checks if a URL redirects to a password protection page
+ * @param {string} url - The URL to check
+ * @returns {Promise<boolean>} - True if the URL redirects to /password
+ */
+const isPasswordProtected = async (url) => {
+  try {
+    const response = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
+    const finalUrl = response.url;
+    const urlObj = new URL(finalUrl);
+    return (
+      urlObj.pathname === "/password" || urlObj.pathname.endsWith("/password")
+    );
+  } catch (err) {
+    debugLog("Error checking password protection", {
+      error: err.message,
+      url,
+    });
+    return false;
+  }
+};
+
 const PR_BODY = process.env.PR_BODY || "";
 const PATH_REGEX = /https:\/\/[^\s\)\]\}]+/g;
 
@@ -153,63 +179,93 @@ try {
   debugLog("ChromeDriver path error", { error: err.message });
 }
 
-for (const { key, url } of urlEntries) {
-  console.log(`Running axe on ${key}: ${url}`);
-  debugLog(`Starting axe test for ${key}`, {
-    url,
-    reportPath: `axe-report-${key}.json`,
-  });
-
-  const reportPath = `axe-report-${key}.json`;
-  try {
-    const axeCommand = chromedriverPath
-      ? `axe "${url}" --save ${reportPath} --chromedriver-path ${chromedriverPath}`
-      : `axe "${url}" --save ${reportPath}`;
-
-    debugLog(`Executing axe command for ${key}`, { command: axeCommand });
-
-    // Check if report file exists before running axe
-    const reportExistsBefore = fs.existsSync(reportPath);
-    debugLog("Report file exists before axe execution", {
-      reportPath,
-      exists: reportExistsBefore,
+(async () => {
+  for (const { key, url } of urlEntries) {
+    console.log(`Running axe on ${key}: ${url}`);
+    debugLog(`Starting axe test for ${key}`, {
+      url,
+      reportPath: `axe-report-${key}.json`,
     });
 
-    execSync(axeCommand, { stdio: "inherit" });
+    // Check for password protection
+    const isProtected = await isPasswordProtected(url);
+    if (isProtected) {
+      console.warn(
+        `⚠️  ${key} URL is password protected, skipping accessibility test`
+      );
+      debugLog(`Skipping password protected URL for ${key}`, { url });
 
-    // Check if report file exists after running axe
-    const reportExistsAfter = fs.existsSync(reportPath);
-    debugLog("Report file exists after axe execution", {
-      reportPath,
-      exists: reportExistsAfter,
-    });
-
-    if (reportExistsAfter) {
-      const reportContent = fs.readFileSync(reportPath, "utf8");
-      debugLog("Report file content length", {
+      // Create a report indicating password protection
+      const reportPath = `axe-report-${key}.json`;
+      fs.writeFileSync(
         reportPath,
-        contentLength: reportContent.length,
-      });
-      console.log(`Saved: ${reportPath}`);
-      debugLog(`Successfully completed axe test for ${key}`, { reportPath });
-    } else {
-      console.error(`❌ Report file not created: ${reportPath}`);
-      debugLog("Report file not found after axe execution", { reportPath });
+        JSON.stringify(
+          {
+            url,
+            passwordProtected: true,
+            error: "URL redirects to password protection page",
+          },
+          null,
+          2
+        )
+      );
+      continue;
     }
-  } catch (err) {
-    console.error(`❌ Error running axe on ${key}:`, err.message);
-    debugLog(`Error running axe test for ${key}`, { error: err.message, url });
 
-    // Check if report file was created despite the error
-    const reportExistsAfterError = fs.existsSync(reportPath);
-    debugLog("Report file exists after error", {
-      reportPath,
-      exists: reportExistsAfterError,
-    });
+    const reportPath = `axe-report-${key}.json`;
+    try {
+      const axeCommand = chromedriverPath
+        ? `axe "${url}" --save ${reportPath} --chromedriver-path ${chromedriverPath}`
+        : `axe "${url}" --save ${reportPath}`;
 
-    fs.writeFileSync(
-      reportPath,
-      JSON.stringify({ error: err.message, url }, null, 2)
-    );
+      debugLog(`Executing axe command for ${key}`, { command: axeCommand });
+
+      // Check if report file exists before running axe
+      const reportExistsBefore = fs.existsSync(reportPath);
+      debugLog("Report file exists before axe execution", {
+        reportPath,
+        exists: reportExistsBefore,
+      });
+
+      execSync(axeCommand, { stdio: "inherit" });
+
+      // Check if report file exists after running axe
+      const reportExistsAfter = fs.existsSync(reportPath);
+      debugLog("Report file exists after axe execution", {
+        reportPath,
+        exists: reportExistsAfter,
+      });
+
+      if (reportExistsAfter) {
+        const reportContent = fs.readFileSync(reportPath, "utf8");
+        debugLog("Report file content length", {
+          reportPath,
+          contentLength: reportContent.length,
+        });
+        console.log(`Saved: ${reportPath}`);
+        debugLog(`Successfully completed axe test for ${key}`, { reportPath });
+      } else {
+        console.error(`❌ Report file not created: ${reportPath}`);
+        debugLog("Report file not found after axe execution", { reportPath });
+      }
+    } catch (err) {
+      console.error(`❌ Error running axe on ${key}:`, err.message);
+      debugLog(`Error running axe test for ${key}`, {
+        error: err.message,
+        url,
+      });
+
+      // Check if report file was created despite the error
+      const reportExistsAfterError = fs.existsSync(reportPath);
+      debugLog("Report file exists after error", {
+        reportPath,
+        exists: reportExistsAfterError,
+      });
+
+      fs.writeFileSync(
+        reportPath,
+        JSON.stringify({ error: err.message, url }, null, 2)
+      );
+    }
   }
-}
+})();
