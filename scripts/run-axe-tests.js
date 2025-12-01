@@ -230,6 +230,8 @@ fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
   }
 
   for (const { key, url } of urlEntries) {
+    const reportPath = `axe-report-${key}.json`;
+    
     console.log(`Running axe on ${key}: ${url}`);
     debugLog(`Starting axe test for ${key}`, {
       url,
