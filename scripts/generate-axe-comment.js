@@ -55,13 +55,8 @@ let output = "### 🧪 Axe Accessibility Report\n\n";
 // Check if live URL is password protected first
 if (previousReport?.passwordProtected) {
   output += "🔒 Site is password protected.\n\n";
-  output += "Accessibility tests cannot be run because the live URL redirects to a password protection page.\n\n";
-  output += "- 🔒 Live URL\n";
-  if (previousReport?.url) {
-    output += `  - URL used: \`${removePbParam(previousReport.url)}\`\n`;
-  }
-  output += "  - Remove password protection to enable accessibility testing\n";
-  
+  output +=
+    "Accessibility tests cannot be run because the live URL redirects to a password protection page.";
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
   debugLog("Generated comment for password protected live URL", {
@@ -109,68 +104,66 @@ if (previousReport?.passwordProtected) {
     : [];
 
   if (previousReport) {
-      const previousViolations = previousReport?.violations
-        ? previousReport.violations.flatMap((v) =>
-            v.nodes.map((n) => ({
-              ...v,
-              ...n,
-            }))
-          )
-        : [];
+    const previousViolations = previousReport?.violations
+      ? previousReport.violations.flatMap((v) =>
+          v.nodes.map((n) => ({
+            ...v,
+            ...n,
+          }))
+        )
+      : [];
 
-      const newViolations = currentViolations.filter(
-        (v) => !previousViolations.some((pv) => pv.id === v.id)
-      );
+    const newViolations = currentViolations.filter(
+      (v) => !previousViolations.some((pv) => pv.id === v.id)
+    );
 
-      output += `- ${newViolations.length} new violations found compared to live\n`;
-      output += `- ${
-        currentViolations.length
-      } violations found on the preview url (\`${
-        removePbParam(currentReport?.url) || "unknown"
-      }\`)\n`;
-      output += `- ${
-        previousViolations.length
-      } violations found on the live url (\`${
-        removePbParam(previousReport?.url) || "unknown"
-      }\`)\n`;
+    output += `- ${newViolations.length} new violations found compared to live\n`;
+    output += `- ${
+      currentViolations.length
+    } violations found on the preview url (\`${
+      removePbParam(currentReport?.url) || "unknown"
+    }\`)\n`;
+    output += `- ${
+      previousViolations.length
+    } violations found on the live url (\`${
+      removePbParam(previousReport?.url) || "unknown"
+    }\`)\n`;
 
-      const buildViolationsTable = ({ title, violations }) => {
-        if (violations.length === 0) return "";
+    const buildViolationsTable = ({ title, violations }) => {
+      if (violations.length === 0) return "";
 
-        let table = "<details>";
-        table += `<summary>${title}</summary>\n\n`;
-        table += "| Issue | Target | Summary |\n";
-        table += "|-------|--------|---------|\n";
+      let table = "<details>";
+      table += `<summary>${title}</summary>\n\n`;
+      table += "| Issue | Target | Summary |\n";
+      table += "|-------|--------|---------|\n";
 
-        for (const n of violations) {
-          const impact = n.impact || "n/a";
-          const help = `[${n.help}](${n.helpUrl})`;
-          const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
-          const failureSummary = n.any
-            .map((a) => `- ${a.message}`)
-            .join("<br>");
+      for (const n of violations) {
+        const impact = n.impact || "n/a";
+        const help = `[${n.help}](${n.helpUrl})`;
+        const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
+        const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
 
-          table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
-        }
+        table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
+      }
 
-        table += "</details>\n\n";
-        return table;
-      };
+      table += "</details>\n\n";
+      return table;
+    };
 
-      output += buildViolationsTable({
-        title: "⚠️ New violations compared to live",
-        violations: sortByImpact(newViolations),
-      });
+    output += buildViolationsTable({
+      title: "⚠️ New violations compared to live",
+      violations: sortByImpact(newViolations),
+    });
 
-      output += buildViolationsTable({
-        title: "🔗 All preview link violations",
-        violations: sortByImpact(currentViolations),
-      });
+    output += buildViolationsTable({
+      title: "🔗 All preview link violations",
+      violations: sortByImpact(currentViolations),
+    });
 
-      output += buildViolationsTable({
-        title: "🧪 All live violations",
-        violations: sortByImpact(previousViolations),
-      });
+    output += buildViolationsTable({
+      title: "🧪 All live violations",
+      violations: sortByImpact(previousViolations),
+    });
   } else {
     output += `- ${
       currentViolations.length

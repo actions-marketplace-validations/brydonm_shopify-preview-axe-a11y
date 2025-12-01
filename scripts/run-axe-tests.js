@@ -150,13 +150,15 @@ fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
 // Check if live URL is password protected before running any tests
 (async () => {
   const liveUrlEntry = urlEntries.find((entry) => entry.key === "default");
-  
+
   if (liveUrlEntry) {
     console.log("Checking if live URL is password protected...");
     const isProtected = await isPasswordProtected(liveUrlEntry.url);
-    
+
     if (isProtected) {
-      console.warn("⚠️  Live URL is password protected, skipping all accessibility tests");
+      console.warn(
+        "⚠️  Live URL is password protected, skipping all accessibility tests"
+      );
       debugLog("Live URL is password protected", { url: liveUrlEntry.url });
 
       // Create a report indicating password protection for live URL
@@ -172,7 +174,7 @@ fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
           2
         )
       );
-      
+
       // Create empty preview report so comment generation knows preview wasn't tested
       if (urlsToTest.preview) {
         fs.writeFileSync(
@@ -189,7 +191,7 @@ fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
           )
         );
       }
-      
+
       console.error("❌ Live URL is password protected. Exiting early.");
       process.exit(0);
     }
