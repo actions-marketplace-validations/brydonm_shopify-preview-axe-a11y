@@ -46,6 +46,8 @@ debugLog("Report files status", {
   previousReportExists: !!previousReport,
   currentReportUrl: currentReport?.url,
   previousReportUrl: previousReport?.url,
+  currentReportPasswordProtected: currentReport?.passwordProtected,
+  previousReportPasswordProtected: previousReport?.passwordProtected,
 });
 
 let output = "### 🧪 Axe Accessibility Report\n\n";
@@ -119,13 +121,18 @@ if (currentReport?.passwordProtected) {
   if (previousReport) {
     // Skip comparison if live report is password protected
     if (previousReport.passwordProtected) {
+      console.log("⚠️ Live URL is password protected - showing preview results only");
       output += `- ${
         currentViolations.length
       } violations found on the preview url (\`${
         removePbParam(currentReport?.url) || "unknown"
       }\`)\n`;
-      output +=
-        "- ⚠️ Live URL is password protected, comparison unavailable\n\n";
+      output += `- 🔒 Live URL is password protected\n`;
+      if (previousReport?.url) {
+        output += `  - URL used: \`${removePbParam(previousReport.url)}\`\n`;
+      }
+      output += `  - The live URL redirects to a password protection page\n`;
+      output += `  - Comparison with live site unavailable\n\n`;
 
       const buildViolationsTable = ({ title, violations }) => {
         if (violations.length === 0) return "";
