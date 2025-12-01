@@ -41,11 +41,29 @@ const removePbParam = (url) => {
 const currentReport = readReport("axe-report-preview.json");
 const previousReport = readReport("axe-report-default.json");
 
+// Get original URLs from attempted-urls.json for accurate display
+let attemptedUrls = {};
+try {
+  if (fs.existsSync("attempted-urls.json")) {
+    attemptedUrls = JSON.parse(fs.readFileSync("attempted-urls.json", "utf8"));
+  }
+} catch (err) {
+  debugLog("Error reading attempted-urls.json", { error: err.message });
+}
+
+// Use original URL from attempted-urls if available, otherwise use report URL
+const getDisplayUrl = (reportUrl, attemptedUrl) => {
+  const urlToUse = attemptedUrl || reportUrl;
+  return urlToUse ? removePbParam(urlToUse) : "unknown";
+};
+
 debugLog("Report files status", {
   currentReportExists: !!currentReport,
   previousReportExists: !!previousReport,
   currentReportUrl: currentReport?.url,
   previousReportUrl: previousReport?.url,
+  attemptedPreviewUrl: attemptedUrls.preview,
+  attemptedDefaultUrl: attemptedUrls.default,
   currentReportPasswordProtected: currentReport?.passwordProtected,
   previousReportPasswordProtected: previousReport?.passwordProtected,
 });
@@ -120,14 +138,16 @@ if (previousReport?.passwordProtected) {
     output += `- ${newViolations.length} new violations found compared to live\n`;
     output += `- ${
       currentViolations.length
-    } violations found on the preview url (\`${
-      removePbParam(currentReport?.url) || "unknown"
-    }\`)\n`;
+    } violations found on the preview url (\`${getDisplayUrl(
+      currentReport?.url,
+      attemptedUrls.preview
+    )}\`)\n`;
     output += `- ${
       previousViolations.length
-    } violations found on the live url (\`${
-      removePbParam(previousReport?.url) || "unknown"
-    }\`)\n`;
+    } violations found on the live url (\`${getDisplayUrl(
+      previousReport?.url,
+      attemptedUrls.default
+    )}\`)\n`;
 
     const buildViolationsTable = ({ title, violations }) => {
       if (violations.length === 0) return "";
@@ -167,9 +187,10 @@ if (previousReport?.passwordProtected) {
   } else {
     output += `- ${
       currentViolations.length
-    } violations found on the preview url (\`${
-      removePbParam(currentReport?.url) || "unknown"
-    }\`)\n\n`;
+    } violations found on the preview url (\`${getDisplayUrl(
+      currentReport?.url,
+      attemptedUrls.preview
+    )}\`)\n\n`;
 
     const buildViolationsTable = ({ title, violations }) => {
       if (violations.length === 0) return "";

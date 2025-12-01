@@ -54,7 +54,10 @@ if (rawPreviewUrl) {
     const previewThemeId = parsed.searchParams.get("preview_theme_id");
 
     if (previewThemeId) {
-      previewUrl = `${parsed.origin}${previewPathname}?preview_theme_id=${previewThemeId}`;
+      // Preserve all query parameters from the original URL
+      previewUrl = `${
+        parsed.origin
+      }${previewPathname}?${parsed.searchParams.toString()}`;
     }
   } catch (err) {
     console.warn("Invalid preview URL:", rawPreviewUrl);
@@ -231,7 +234,7 @@ fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
 
   for (const { key, url } of urlEntries) {
     const reportPath = `axe-report-${key}.json`;
-    
+
     console.log(`Running axe on ${key}: ${url}`);
     debugLog(`Starting axe test for ${key}`, {
       url,
