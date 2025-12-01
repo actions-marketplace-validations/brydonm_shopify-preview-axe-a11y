@@ -52,29 +52,19 @@ debugLog("Report files status", {
 
 let output = "### 🧪 Axe Accessibility Report\n\n";
 
-// Check if preview report is password protected first
-if (currentReport?.passwordProtected) {
-  output += "⚠️ Preview URL is password protected.\n";
-  output += "- 🔒 Preview report\n";
-  if (currentReport?.url) {
-    output += `  - URL used: \`${removePbParam(currentReport.url)}\`\n`;
+// Check if live URL is password protected first
+if (previousReport?.passwordProtected) {
+  output += "🔒 Site is password protected.\n\n";
+  output += "Accessibility tests cannot be run because the live URL redirects to a password protection page.\n\n";
+  output += "- 🔒 Live URL\n";
+  if (previousReport?.url) {
+    output += `  - URL used: \`${removePbParam(previousReport.url)}\`\n`;
   }
-  output += "  - The preview URL redirects to a password protection page\n";
-  output +=
-    "  - Remove password protection or use a publicly accessible preview URL\n";
-
-  // Check if live report also exists and is password protected
-  if (previousReport?.passwordProtected) {
-    output += "- 🔒 Live report\n";
-    if (previousReport?.url) {
-      output += `  - URL used: \`${removePbParam(previousReport.url)}\`\n`;
-    }
-    output += "  - The live URL also redirects to a password protection page\n";
-  }
-
+  output += "  - Remove password protection to enable accessibility testing\n";
+  
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
-  debugLog("Generated comment for password protected preview", {
+  debugLog("Generated comment for password protected live URL", {
     outputLength: output.length,
   });
 } else if (!currentReport) {
@@ -119,49 +109,6 @@ if (currentReport?.passwordProtected) {
     : [];
 
   if (previousReport) {
-    // Skip comparison if live report is password protected
-    if (previousReport.passwordProtected) {
-      console.log("⚠️ Live URL is password protected - showing preview results only");
-      output += `- ${
-        currentViolations.length
-      } violations found on the preview url (\`${
-        removePbParam(currentReport?.url) || "unknown"
-      }\`)\n`;
-      output += `- 🔒 Live URL is password protected\n`;
-      if (previousReport?.url) {
-        output += `  - URL used: \`${removePbParam(previousReport.url)}\`\n`;
-      }
-      output += `  - The live URL redirects to a password protection page\n`;
-      output += `  - Comparison with live site unavailable\n\n`;
-
-      const buildViolationsTable = ({ title, violations }) => {
-        if (violations.length === 0) return "";
-
-        let table = "<details>";
-        table += `<summary>${title}</summary>\n\n`;
-        table += "| Issue | Target | Summary |\n";
-        table += "|-------|--------|---------|\n";
-
-        for (const n of violations) {
-          const impact = n.impact || "n/a";
-          const help = `[${n.help}](${n.helpUrl})`;
-          const target = Array.isArray(n.target) ? n.target.join(", ") : "n/a";
-          const failureSummary = n.any
-            .map((a) => `- ${a.message}`)
-            .join("<br>");
-
-          table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
-        }
-
-        table += "</details>\n\n";
-        return table;
-      };
-
-      output += buildViolationsTable({
-        title: "🔗 All preview violations",
-        violations: sortByImpact(currentViolations),
-      });
-    } else {
       const previousViolations = previousReport?.violations
         ? previousReport.violations.flatMap((v) =>
             v.nodes.map((n) => ({
@@ -224,7 +171,6 @@ if (currentReport?.passwordProtected) {
         title: "🧪 All live violations",
         violations: sortByImpact(previousViolations),
       });
-    }
   } else {
     output += `- ${
       currentViolations.length

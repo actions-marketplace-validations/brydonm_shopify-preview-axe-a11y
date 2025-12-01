@@ -147,25 +147,24 @@ const urlEntries = Object.entries(urlsToTest).map(([key, url]) => ({
 // Store attempted URLs for error reporting
 fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
 
-// Check for password protection before running any tests
+// Check if live URL is password protected before running any tests
 (async () => {
-  console.log("Checking for password protection...");
-
-  for (const { key, url } of urlEntries) {
-    const isProtected = await isPasswordProtected(url);
+  const liveUrlEntry = urlEntries.find((entry) => entry.key === "default");
+  
+  if (liveUrlEntry) {
+    console.log("Checking if live URL is password protected...");
+    const isProtected = await isPasswordProtected(liveUrlEntry.url);
+    
     if (isProtected) {
-      console.warn(
-        `⚠️  ${key} URL is password protected, skipping accessibility test`
-      );
-      debugLog(`Password protected URL detected for ${key}`, { url });
+      console.warn("⚠️  Live URL is password protected, skipping all accessibility tests");
+      debugLog("Live URL is password protected", { url: liveUrlEntry.url });
 
-      // Create a report indicating password protection
-      const reportPath = `axe-report-${key}.json`;
+      // Create a report indicating password protection for live URL
       fs.writeFileSync(
-        reportPath,
+        "axe-report-default.json",
         JSON.stringify(
           {
-            url,
+            url: liveUrlEntry.url,
             passwordProtected: true,
             error: "URL redirects to password protection page",
           },
@@ -173,12 +172,26 @@ fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
           2
         )
       );
-
-      // If preview URL is password protected, exit early
-      if (key === "preview") {
-        console.error("❌ Preview URL is password protected. Exiting early.");
-        process.exit(0);
+      
+      // Create empty preview report so comment generation knows preview wasn't tested
+      if (urlsToTest.preview) {
+        fs.writeFileSync(
+          "axe-report-preview.json",
+          JSON.stringify(
+            {
+              url: urlsToTest.preview,
+              passwordProtected: false,
+              skipped: true,
+              error: "Tests skipped because live URL is password protected",
+            },
+            null,
+            2
+          )
+        );
       }
+      
+      console.error("❌ Live URL is password protected. Exiting early.");
+      process.exit(0);
     }
   }
 
@@ -215,20 +228,6 @@ fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
   }
 
   for (const { key, url } of urlEntries) {
-    // Skip if already marked as password protected
-    const reportPath = `axe-report-${key}.json`;
-    if (fs.existsSync(reportPath)) {
-      try {
-        const existingReport = JSON.parse(fs.readFileSync(reportPath, "utf8"));
-        if (existingReport.passwordProtected) {
-          console.log(`Skipping ${key} (password protected)`);
-          continue;
-        }
-      } catch {
-        // If we can't parse it, continue with the test
-      }
-    }
-
     console.log(`Running axe on ${key}: ${url}`);
     debugLog(`Starting axe test for ${key}`, {
       url,
