@@ -47,20 +47,28 @@ let output = "### 🧪 Axe Accessibility Report\n\n";
 if (!currentReport) {
   console.error("❌ No axe-report-preview.json file found");
 
+  let attemptedUrls = {};
+  try {
+    if (fs.existsSync("attempted-urls.json")) {
+      attemptedUrls = JSON.parse(
+        fs.readFileSync("attempted-urls.json", "utf8")
+      );
+    }
+  } catch (err) {
+    debugLog("Error reading attempted-urls.json", { error: err.message });
+  }
+
   output += "Preview report was not generated.\n";
   output += "- ❌ Preview report\n";
-  output += "  - Ensure a preview URL was included in the PR body\n";
+  if (attemptedUrls.preview) {
+    output += `  - URL used: \`${attemptedUrls.preview}\`\n`;
+  }
+  output +=
+    "  - Ensure a preview URL with `preview_theme_id` was included in the PR body\n";
   output += "  - Try rerunning the action\n";
   output +=
     "  - Try making the preview URL more prominent (removing markdown)\n";
   output += "  - Check the action logs for more details\n";
-
-  if (!previousReport) {
-    output += "- ❌ Live report\n";
-    output += "  - Ensure the `default_url` was passed into the action\n";
-    output += "  - Try rerunning the action\n";
-    output += "  - Check the action logs for more details\n";
-  }
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
@@ -78,7 +86,6 @@ if (!currentReport) {
     : [];
 
   if (previousReport) {
-    // Both reports exist - compare them
     const previousViolations = previousReport?.violations
       ? previousReport.violations.flatMap((v) =>
           v.nodes.map((n) => ({
@@ -140,14 +147,11 @@ if (!currentReport) {
       violations: sortByImpact(previousViolations),
     });
   } else {
-    // Only preview report exists - show just preview violations
     output += `- ${
       currentViolations.length
     } violations found on the preview url (\`${
       removePbParam(currentReport?.url) || "unknown"
-    }\`)\n`;
-    output +=
-      "- No live report available for comparison (no `default_url` provided)\n\n";
+    }\`)\n\n`;
 
     const buildViolationsTable = ({ title, violations }) => {
       if (violations.length === 0) return "";

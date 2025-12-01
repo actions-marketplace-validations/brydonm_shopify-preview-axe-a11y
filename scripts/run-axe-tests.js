@@ -3,12 +3,10 @@ const fs = require("node:fs");
 const { debugLog } = require("./utils");
 
 const PR_BODY = process.env.PR_BODY || "";
-const DEFAULT_URL = process.env.DEFAULT_URL || "";
 const PATH_REGEX = /https:\/\/[^\s\)\]\}]+/g;
 
 debugLog("Environment variables", {
   PR_BODY: PR_BODY.substring(0, 200) + (PR_BODY.length > 200 ? "..." : ""),
-  DEFAULT_URL,
   GITHUB_EVENT_NAME: process.env.GITHUB_EVENT_NAME,
 });
 
@@ -16,10 +14,7 @@ const allUrls = PR_BODY.match(PATH_REGEX) || [];
 debugLog("All URLs found in PR body", allUrls);
 
 const rawPreviewUrl =
-  allUrls.find(
-    (url) =>
-      url.includes("preview_theme_id=") || url.includes("shopifypreview.com")
-  ) || "";
+  allUrls.find((url) => url.includes("preview_theme_id=")) || "";
 
 debugLog("Raw preview URL found", rawPreviewUrl);
 
@@ -34,8 +29,6 @@ if (rawPreviewUrl) {
 
     if (previewThemeId) {
       previewUrl = `${parsed.origin}${previewPathname}?preview_theme_id=${previewThemeId}`;
-    } else if (parsed.hostname.includes("shopifypreview.com")) {
-      previewUrl = rawPreviewUrl;
     }
   } catch (err) {
     console.warn("Invalid preview URL:", rawPreviewUrl);
@@ -49,15 +42,26 @@ if (rawPreviewUrl) {
 debugLog("Final preview URL", previewUrl);
 debugLog("Preview pathname", previewPathname);
 
+let liveUrl = "";
+if (previewUrl) {
+  try {
+    const parsed = new URL(previewUrl);
+    parsed.searchParams.delete("preview_theme_id");
+    liveUrl = parsed.toString();
+    debugLog("Derived live URL from preview URL", liveUrl);
+  } catch (err) {
+    debugLog("Error deriving live URL", { error: err.message });
+  }
+}
+
 console.log("Preview URL:", previewUrl);
-console.log("Default URL:", DEFAULT_URL);
-console.log("Path:", previewPathname);
+console.log("Live URL:", liveUrl);
 
 const urlsToTest = {};
 
 debugLog("URL processing results", {
   previewUrl,
-  defaultUrl: DEFAULT_URL,
+  liveUrl,
   previewPathname,
   urlsToTest: Object.keys(urlsToTest),
 });
@@ -100,22 +104,8 @@ if (previewUrl) {
   addUrlToTest(previewUrl, "preview");
 }
 
-if (DEFAULT_URL) {
-  try {
-    const defaultUrlObj = new URL(DEFAULT_URL);
-    if (previewPathname) {
-      defaultUrlObj.pathname = previewPathname;
-    }
-    const defaultUrlWithPath = defaultUrlObj.toString();
-    addUrlToTest(defaultUrlWithPath, "default");
-  } catch (err) {
-    console.warn("Invalid DEFAULT_URL:", DEFAULT_URL);
-    debugLog("Error processing DEFAULT_URL", {
-      error: err.message,
-      url: DEFAULT_URL,
-    });
-    addUrlToTest(DEFAULT_URL, "default");
-  }
+if (liveUrl) {
+  addUrlToTest(liveUrl, "default");
 }
 
 if (Object.keys(urlsToTest).length === 0) {
@@ -127,6 +117,9 @@ const urlEntries = Object.entries(urlsToTest).map(([key, url]) => ({
   key,
   url,
 }));
+
+// Store attempted URLs for error reporting
+fs.writeFileSync("attempted-urls.json", JSON.stringify(urlsToTest, null, 2));
 
 // Get ChromeDriver path from browser-driver-manager
 let chromedriverPath = "";
