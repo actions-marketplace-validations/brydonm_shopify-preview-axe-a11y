@@ -4,6 +4,12 @@ const { sortByImpact, debugLog } = require("./utils");
 const readReport = (filename) => {
   if (!fs.existsSync(filename)) return null;
   const data = JSON.parse(fs.readFileSync(filename, "utf8"));
+
+  // Handle password-protected reports
+  if (data.passwordProtected) {
+    return { ...data, passwordProtected: true, violations: [] };
+  }
+
   return Array.isArray(data.violations)
     ? data
     : Array.isArray(data)
@@ -19,38 +25,92 @@ const impactEmojis = {
   info: "ℹ️",
 };
 
+/**
+ * Removes pb=0 parameter from URL for display purposes
+ * @param {string} url - The URL to clean
+ * @returns {string} - The URL without pb=0 parameter
+ */
+const removePbParam = (url) => {
+  if (!url) return url;
+  const urlObj = new URL(url);
+  urlObj.searchParams.delete("pb");
+  const cleaned = urlObj.toString();
+  return cleaned.replace(/\?$/, "");
+};
+
 const currentReport = readReport("axe-report-preview.json");
 const previousReport = readReport("axe-report-default.json");
+
+// Get original URLs from attempted-urls.json for accurate display
+let attemptedUrls = {};
+try {
+  if (fs.existsSync("attempted-urls.json")) {
+    attemptedUrls = JSON.parse(fs.readFileSync("attempted-urls.json", "utf8"));
+  }
+} catch (err) {
+  debugLog("Error reading attempted-urls.json", { error: err.message });
+}
+
+// Use original URL from attempted-urls if available, otherwise use report URL
+const getDisplayUrl = (reportUrl, attemptedUrl) => {
+  const urlToUse = attemptedUrl || reportUrl;
+  return urlToUse ? removePbParam(urlToUse) : "unknown";
+};
 
 debugLog("Report files status", {
   currentReportExists: !!currentReport,
   previousReportExists: !!previousReport,
   currentReportUrl: currentReport?.url,
-  previousReportUrl: previousReport?.url
+  previousReportUrl: previousReport?.url,
+  attemptedPreviewUrl: attemptedUrls.preview,
+  attemptedDefaultUrl: attemptedUrls.default,
+  currentReportPasswordProtected: currentReport?.passwordProtected,
+  previousReportPasswordProtected: previousReport?.passwordProtected,
 });
 
 let output = "### 🧪 Axe Accessibility Report\n\n";
 
-if (!currentReport) {
+// Check if live URL is password protected first
+if (previousReport?.passwordProtected) {
+  output += "🔒 Site is password protected.\n\n";
+  output +=
+    "Accessibility tests cannot be run because the live URL redirects to a password protection page.";
+  fs.writeFileSync("axe-comment.md", output);
+  console.log("✅ axe-comment.md generated");
+  debugLog("Generated comment for password protected live URL", {
+    outputLength: output.length,
+  });
+} else if (!currentReport) {
   console.error("❌ No axe-report-preview.json file found");
+
+  let attemptedUrls = {};
+  try {
+    if (fs.existsSync("attempted-urls.json")) {
+      attemptedUrls = JSON.parse(
+        fs.readFileSync("attempted-urls.json", "utf8")
+      );
+    }
+  } catch (err) {
+    debugLog("Error reading attempted-urls.json", { error: err.message });
+  }
 
   output += "Preview report was not generated.\n";
   output += "- ❌ Preview report\n";
-  output += "  - Ensure a preview URL was included in the PR body\n";
-  output += "  - Try rerunning the action\n";
-  output += "  - Try making the preview URL more prominent (removing markdown)\n";
-  output += "  - Check the action logs for more details\n";
-
-  if (!previousReport) {
-    output += "- ❌ Live report\n";
-    output += "  - Ensure the `default_url` was passed into the action\n";
-    output += "  - Try rerunning the action\n";
-    output += "  - Check the action logs for more details\n";
+  if (attemptedUrls.preview) {
+    output += `  - URL used: \`${attemptedUrls.preview}\`\n`;
   }
+  output +=
+    "  - Ensure a preview URL with `preview_theme_id` was included in the PR body\n";
+  output += "  - Try rerunning the action\n";
+  output +=
+    "  - Try making the preview URL more prominent (removing markdown)\n";
+  output += "  - Check the action logs for more details\n";
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
-  debugLog("Generated comment for missing preview report", { outputLength: output.length });
+  debugLog("Generated comment for missing preview report", {
+    outputLength: output.length,
+  });
 } else {
   const currentViolations = currentReport?.violations
     ? currentReport.violations.flatMap((v) =>
@@ -62,7 +122,6 @@ if (!currentReport) {
     : [];
 
   if (previousReport) {
-    // Both reports exist - compare them
     const previousViolations = previousReport?.violations
       ? previousReport.violations.flatMap((v) =>
           v.nodes.map((n) => ({
@@ -79,14 +138,16 @@ if (!currentReport) {
     output += `- ${newViolations.length} new violations found compared to live\n`;
     output += `- ${
       currentViolations.length
-    } violations found on the preview url (\`${
-      currentReport?.url || "unknown"
-    }\`)\n`;
+    } violations found on the preview url (\`${getDisplayUrl(
+      currentReport?.url,
+      attemptedUrls.preview
+    )}\`)\n`;
     output += `- ${
       previousViolations.length
-    } violations found on the live url (\`${
-      previousReport?.url || "unknown"
-    }\`)\n`;
+    } violations found on the live url (\`${getDisplayUrl(
+      previousReport?.url,
+      attemptedUrls.default
+    )}\`)\n`;
 
     const buildViolationsTable = ({ title, violations }) => {
       if (violations.length === 0) return "";
@@ -103,7 +164,7 @@ if (!currentReport) {
         const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
 
         table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
-      };
+      }
 
       table += "</details>\n\n";
       return table;
@@ -124,13 +185,12 @@ if (!currentReport) {
       violations: sortByImpact(previousViolations),
     });
   } else {
-    // Only preview report exists - show just preview violations
     output += `- ${
       currentViolations.length
-    } violations found on the preview url (\`${
-      currentReport?.url || "unknown"
-    }\`)\n`;
-    output += "- No live report available for comparison (no `default_url` provided)\n\n";
+    } violations found on the preview url (\`${getDisplayUrl(
+      currentReport?.url,
+      attemptedUrls.preview
+    )}\`)\n\n`;
 
     const buildViolationsTable = ({ title, violations }) => {
       if (violations.length === 0) return "";
@@ -147,7 +207,7 @@ if (!currentReport) {
         const failureSummary = n.any.map((a) => `- ${a.message}`).join("<br>");
 
         table += `| ${impactEmojis[impact]} ${help} | \`${target}\` | ${failureSummary} |\n`;
-      };
+      }
 
       table += "</details>\n\n";
       return table;
@@ -161,9 +221,9 @@ if (!currentReport) {
 
   fs.writeFileSync("axe-comment.md", output);
   console.log("✅ axe-comment.md generated");
-  debugLog("Generated comment for preview report", { 
+  debugLog("Generated comment for preview report", {
     outputLength: output.length,
     currentViolationsCount: currentViolations.length,
-    hasPreviousReport: !!previousReport
+    hasPreviousReport: !!previousReport,
   });
 }

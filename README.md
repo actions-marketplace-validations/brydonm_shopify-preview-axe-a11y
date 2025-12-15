@@ -21,8 +21,6 @@ name: Shopify Axe A11y Report
 on:
   pull_request:
     types: [opened, edited, synchronize]
-  push:
-    branches: [main]
 
 permissions:
   contents: write
@@ -36,24 +34,16 @@ jobs:
       - uses: actions/checkout@v3
 
       - uses: brydonm/shopify-preview-axe-a11y@v1
-        with:
-          default_url: ""
 ```
-
-## 🔧 Inputs
-
-| Name | Required | Description |
-| -------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- | |
-| default_url | ✅ Yes | Default URL to run the base tests on. This is required for the push action to generate a report based on the branch. |
 
 ## 📝 PR Description Format
 
-Include a preview URL **anywhere** in the PR body like ():
+Include a preview URL **anywhere** in the PR body with the `preview_theme_id` parameter:
 
-- https://your-site.shopifypreview.com
 - https://your-site.com/?preview_theme_id=123456789
+- https://your-site.com/products/item?preview_theme_id=123456789
 
-The action will automatically find and test the first matching URL that contains `?preview_theme_id` or `shopifypreview.com`.
+The action will automatically find and test the first matching URL that contains `preview_theme_id`.
 
 ## 🛡️ Security
 

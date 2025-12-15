@@ -3,8 +3,6 @@ name: Test Action
 on:
   pull_request:
     types: [opened, edited, synchronize]
-  push:
-    branches: [main]
 
 permissions:
   contents: write
@@ -19,5 +17,3 @@ jobs:
 
       - name: Run custom AXE preview action
         uses: ./
-        with:
-          default_url: "https://leafery.ca"
